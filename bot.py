@@ -54,12 +54,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def download_media(url, tmp_dir):
-    opts = {
+        opts = {
         "outtmpl": os.path.join(tmp_dir, "%(id)s.%(ext)s"),
         "format": "best",
         "quiet": True,
         "no_warnings": True,
+        "cookiefile": "/app/www.instagram.com_cookies.txt",
     }
+
     files = []
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=True)
