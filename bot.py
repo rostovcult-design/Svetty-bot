@@ -40,9 +40,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tmp_dir = tempfile.mkdtemp(prefix="insta_")
     try:
         files = download_media(url, tmp_dir)
-        if not files:
-            await update.message.reply_text("Не удалось скачать. Попробуй другую ссылку.")
-            return
+         if not files:
+        await update.message.reply_text("Ответ API: " + str(data)[:500])
+        return
         await update.message.reply_text("Постю в канал...")
         bot = Bot(token=BOT_TOKEN)
         await post_media(bot, files, caption)
