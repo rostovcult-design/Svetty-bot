@@ -2,15 +2,15 @@
 import os
 import tempfile
 import shutil
+import requests
 from pathlib import Path
 
-import yt_dlp
 from telegram import Update, Bot, InputMediaPhoto, InputMediaVideo
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 CHANNEL = "@sohrani_obsudim"
-COOKIES = "/app/www.instagram.com_cookies.txt"
+RAPID_API_KEY = "0e6dc9b84dmsh2db7c5a936be826p1eca23jsne799cef826f2"
 
 user_links = {}
 
@@ -55,22 +55,39 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def download_media(url, tmp_dir):
-    opts = {
-        "outtmpl": os.path.join(tmp_dir, "%(id)s.%(ext)s"),
-               "format": "best[ext=mp4]/best",
-        "quiet": True,
-        "no_warnings": True,
-        "cookiefile": COOKIES,
-    }
+    response = requests.get(
+        "https://instagram-reels-downloader-api.p.rapidapi.com/download",
+        params={"url": url},
+        headers={
+            "x-rapidapi-host": "instagram-reels-downloader-api.p.rapidapi.com",
+            "x-rapidapi-key": RAPID_API_KEY,
+        }
+    )
+    data = response.json()
+
     files = []
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-        entries = info.get("entries") or [info]
-        for e in entries:
-            if e:
-                f = ydl.prepare_filename(e)
-                if os.path.exists(f):
-                    files.append(f)
+    media_urls = []
+
+    if isinstance(data, list):
+        media_urls = [item.get("url") or item.get("download_url") for item in data if item]
+    elif isinstance(data, dict):
+        if "url" in data:
+            media_urls = [data["url"]]
+        elif "download_url" in data:
+            media_urls = [data["download_url"]]
+        elif "media" in data:
+            media_urls = [data["media"]]
+
+    for i, media_url in enumerate(media_urls[:10]):
+        if not media_url:
+            continue
+        r = requests.get(media_url, timeout=30)
+        ext = ".mp4" if "video" in r.headers.get("content-type", "") else ".jpg"
+        filepath = os.path.join(tmp_dir, f"media_{i}{ext}")
+        with open(filepath, "wb") as f:
+            f.write(r.content)
+        files.append(filepath)
+
     return files
 
 
