@@ -10,6 +10,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 CHANNEL = "@sohrani_obsudim"
+COOKIES = "/app/www.instagram.com_cookies.txt"
 
 user_links = {}
 
@@ -40,7 +41,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         files = download_media(url, tmp_dir)
         if not files:
-            await update.message.reply_text("Не удалось скачать. Пост должен быть публичным.")
+            await update.message.reply_text("Не удалось скачать. Попробуй другую ссылку.")
             return
         await update.message.reply_text("Постю в канал...")
         bot = Bot(token=BOT_TOKEN)
@@ -54,14 +55,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def download_media(url, tmp_dir):
-        opts = {
+    opts = {
         "outtmpl": os.path.join(tmp_dir, "%(id)s.%(ext)s"),
         "format": "best",
         "quiet": True,
         "no_warnings": True,
-        "cookiefile": "/app/www.instagram.com_cookies.txt",
+        "cookiefile": COOKIES,
     }
-
     files = []
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=True)
