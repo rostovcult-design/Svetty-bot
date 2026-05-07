@@ -39,10 +39,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Скачиваю из Instagram...")
     tmp_dir = tempfile.mkdtemp(prefix="insta_")
     try:
-        result = download_media(url, tmp_dir)
+        files = download_media(url, tmp_dir)
+        if not files:
+            await update.message.reply_text("Не удалось скачать. Попробуй другую ссылку.")
+            return
         await update.message.reply_text("Постю в канал...")
         bot = Bot(token=BOT_TOKEN)
-        await post_media(bot, result, caption)
+        await post_media(bot, files, caption)
         await update.message.reply_text("Готово! Опубликовано в @sohrani_obsudim\n\nОтправь следующую ссылку:")
     except Exception as e:
         await update.message.reply_text("Ошибка: " + str(e))
@@ -53,14 +56,30 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def download_media(url, tmp_dir):
     response = requests.get(
-        "https://instagram-reels-downloader-api.p.rapidapi.com/download",
+        "https://instagram-downloader-download-instagram-stories-videos4.p.rapidapi.com/convert",
         params={"url": url},
         headers={
-            "x-rapidapi-host": "instagram-reels-downloader-api.p.rapidapi.com",
+            "x-rapidapi-host": "instagram-downloader-download-instagram-stories-videos4.p.rapidapi.com",
             "x-rapidapi-key": RAPID_API_KEY,
         }
     )
-    raise Exception("API ответ: " + response.text[:500])
+    data = response.json()
+    media_list = data.get("media", [])
+    files = []
+    seen = set()
+    for item in media_list[:10]:
+        media_url = item.get("thumbnail") or item.get("url")
+        media_type = item.get("type", "image")
+        if not media_url or media_url in seen:
+            continue
+        seen.add(media_url)
+        r = requests.get(media_url, timeout=30)
+        ext = ".mp4" if media_type == "video" else ".jpg"
+        filepath = os.path.join(tmp_dir, f"media_{len(files)}{ext}")
+        with open(filepath, "wb") as f:
+            f.write(r.content)
+        files.append(filepath)
+    return files
 
 
 def is_video(f):
