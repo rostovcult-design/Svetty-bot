@@ -57,7 +57,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def download_media(url, tmp_dir):
     opts = {
         "outtmpl": os.path.join(tmp_dir, "%(id)s.%(ext)s"),
-        "format": "best",
+               "format": "best[ext=mp4]/best",
         "quiet": True,
         "no_warnings": True,
         "cookiefile": COOKIES,
