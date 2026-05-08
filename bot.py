@@ -58,15 +58,14 @@ def extract_shortcode(url: str) -> str:
 
 def get_post_text(shortcode: str) -> tuple:
     response = requests.get(
-        "https://instagram-api-fast-reliable-data-scraper.p.rapidapi.com/post_details",
-        params={"shortcode": shortcode},
+        f"https://instagram-api-fast-reliable-data-scraper.p.rapidapi.com/post?shortcode={shortcode}",
         headers={
             "x-rapidapi-host": "instagram-api-fast-reliable-data-scraper.p.rapidapi.com",
             "x-rapidapi-key": RAPID_API_KEY,
         },
         timeout=15
     )
-    raw = response.text[:500]
+    raw = response.text[:300]
     data = response.json()
     caption_obj = data.get("caption", {})
     if isinstance(caption_obj, dict):
@@ -158,7 +157,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         post_text, username, raw = get_post_text(shortcode)
-        await update.message.reply_text("RAW API ответ: " + raw)
+        await update.message.reply_text("RAW: " + raw)
 
         await update.message.reply_text("Пишу подпись...")
         caption = generate_caption(post_text, username)
