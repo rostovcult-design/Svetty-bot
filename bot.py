@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import re
 import tempfile
 import shutil
 import requests
@@ -27,35 +28,59 @@ SYSTEM_PROMPT = """Ты — автор Telegram канала "сохрани, о
 
 [рубрика — обычный текст]
 
-**[эмодзи] [заголовок новости — жирный]**
+**[эмодзи] [заголовок новости — жирный, конкретный]**
 
 [3-5 предложений от первого лица]
 
 [вопрос или "обсудим?"]
 
-[если есть аккаунт — @username]
+@[username источника]
 
 #хэштег1 #хэштег2 #хэштег3
 
 Правила:
-- Эмодзи подбирай по смыслу: 🖤 элегантное, 🔥 громкое, 🕊️ утончённое, 👁️ неожиданное, ✨ красивое, 💔 грустный инфоповод, 🎭 арт
+- Эмодзи подбирай по смыслу: 🖤 элегантное, 🔥 громкое, 🕊️ утончённое, 👁️ неожиданное, ✨ красивое, 💔 грустный инфоповод, 🎭 арт, 👑 культовое
 - Хэштеги только из: #сохраниобсудим #сохраниэто #обсудим #тывидела #нудавайчестно #мнение #модасейчас #инфоповод #трендилинет #эстетика #ктоэтоодобрил #спорно #гениальноилипровал #тихопроисходит #скрытыйтренд
 - Никакого лишнего markdown кроме ** для заголовка
-- НИКОГДА не проси дополнительную информацию — пиши пост на основе того что есть
-- Если нет подписи — придумай пост по названию аккаунта и контексту ссылки"""
+- НИКОГДА не проси дополнительную информацию
+- Используй конкретные имена брендов, дизайнеров, моделей из подписи"""
 
 
-def generate_caption(post_text: str, url: str, username: str) -> str:
-    context = ""
-    if post_text:
-        context += f"Подпись из Instagram:\n{post_text}\n\n"
-    if username:
-        context += f"Аккаунт: @{username}\n\n"
-    context += f"Ссылка: {url}"
+def extract_shortcode(url: str) -> str:
+    match = re.search(r'/p/([A-Za-z0-9_-]+)', url)
+    if match:
+        return match.group(1)
+    match = re.search(r'/reel/([A-Za-z0-9_-]+)', url)
+    if match:
+        return match.group(1)
+    return ""
 
-    prompt = f"""{context}
 
-Напиши пост для канала прямо сейчас. Только текст поста, без вопросов и пояснений."""
+def get_post_info(shortcode: str) -> tuple:
+    response = requests.get(
+        "https://instagram-api-fast-reliable-data-scraper.p.rapidapi.com/post_details",
+        params={"shortcode": shortcode},
+        headers={
+            "x-rapidapi-host": "instagram-api-fast-reliable-data-scraper.p.rapidapi.com",
+            "x-rapidapi-key": RAPID_API_KEY,
+        },
+        timeout=15
+    )
+    data = response.json()
+    caption = data.get("caption", {})
+    post_text = caption.get("text", "") if isinstance(caption, dict) else ""
+    username = data.get("user", {}).get("username", "")
+    return post_text, username
+
+
+def generate_caption(post_text: str, username: str) -> str:
+    prompt = f"""Оригинальная подпись из Instagram:
+
+{post_text}
+
+Аккаунт источника: @{username}
+
+Напиши пост для канала прямо сейчас. Только текст поста."""
 
     response = requests.post(
         "https://api.anthropic.com/v1/messages",
@@ -89,16 +114,24 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Это не Instagram ссылка. Попробуй ещё раз.")
         return
 
+    shortcode = extract_shortcode(text)
+    if not shortcode:
+        await update.message.reply_text("Не могу найти shortcode в ссылке. Попробуй другую.")
+        return
+
     await update.message.reply_text("Скачиваю из Instagram...")
     tmp_dir = tempfile.mkdtemp(prefix="insta_")
     try:
         files, post_text, username = download_media(text, tmp_dir)
         if not files:
-            await update.message.reply_text("Не удалось скачать. Попробуй другую ссылку.")
+            await update.message.reply_text("Не удалось скачать медиа. Попробуй другую ссылку.")
             return
 
+        if not post_text:
+            post_text, username = get_post_info(shortcode)
+
         await update.message.reply_text("Пишу подпись...")
-        caption = generate_caption(post_text, text, username)
+        caption = generate_caption(post_text, username)
 
         await update.message.reply_text("Постю в канал...")
         bot = Bot(token=BOT_TOKEN)
@@ -122,8 +155,8 @@ def download_media(url, tmp_dir):
     )
     data = response.json()
     media_list = data.get("media", [])
-    post_text = data.get("caption", "") or data.get("title", "") or data.get("description", "") or ""
-    username = data.get("username", "") or data.get("owner", {}).get("username", "") or ""
+    post_text = data.get("caption", "") or ""
+    username = data.get("username", "") or ""
 
     files = []
     seen = set()
