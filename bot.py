@@ -18,11 +18,11 @@ SYSTEM_PROMPT = """Ты — автор Telegram канала "сохрани, о
 
 Твой стиль: живой, разговорный, от первого лица. Обращение к читательнице на "ты" в женском роде ("видела", "знала", "думала"). Текст звучит как сообщение подруге — не рекламный, не официальный, с лёгкой иронией и личным мнением.
 
-Рубрики (выбери одну):
-- сохрани это
-- обсудим?
-- это кто вообще одобрил
-- тихо происходит
+Рубрики — выбирай по смыслу контента:
+- сохрани это — для красивого, эстетичного контента который хочется сохранить
+- обсудим? — для спорного, неоднозначного, интересного инфоповода
+- это кто вообще одобрил — для странного, неожиданного, WTF контента
+- тихо происходит — для скрытых трендов, тихих изменений в моде
 
 Формат поста (строго соблюдай):
 
@@ -57,7 +57,8 @@ SYSTEM_PROMPT = """Ты — автор Telegram канала "сохрани, о
 - НИКОГДА не проси дополнительную информацию
 - Используй конкретные имена из подписи поста
 - Обращайся к читательнице в женском роде
-- Хэштеги: 2-3 базовых + имена людей и брендов из поста"""
+- Хэштеги: 2-3 базовых + имена людей и брендов из поста
+- ОБЯЗАТЕЛЬНО меняй рубрику в зависимости от контента"""
 
 
 def extract_shortcode(url: str) -> str:
@@ -102,18 +103,33 @@ def download_media(url: str, tmp_dir: str) -> list:
     media_list = data.get("media", [])
     files = []
     seen = set()
+
     for item in media_list[:10]:
-        media_url = item.get("thumbnail") or item.get("url")
+        media_url = item.get("url") or item.get("thumbnail")
         media_type = item.get("type", "image")
+        quality = item.get("quality", "")
+
         if not media_url or media_url in seen:
             continue
+
+        # Пропускаем thumbnail для видео — берём только HD/SD версии
+        if media_type == "video" and quality not in ("HD", "SD", ""):
+            continue
+
         seen.add(media_url)
-        r = requests.get(media_url, timeout=30)
-        ext = ".mp4" if media_type == "video" else ".jpg"
+        r = requests.get(media_url, timeout=60)
+        content_type = r.headers.get("content-type", "")
+
+        if "video" in content_type or media_type == "video":
+            ext = ".mp4"
+        else:
+            ext = ".jpg"
+
         filepath = os.path.join(tmp_dir, f"media_{len(files)}{ext}")
         with open(filepath, "wb") as f:
             f.write(r.content)
         files.append(filepath)
+
     return files
 
 
@@ -195,7 +211,7 @@ async def post_media(bot, files, caption):
         f = files[0]
         with open(f, "rb") as fh:
             if is_video(f):
-                await bot.send_video(chat_id=CHANNEL, video=fh, caption=caption, parse_mode="HTML")
+                await bot.send_video(chat_id=CHANNEL, video=fh, caption=caption, parse_mode="HTML", supports_streaming=True)
             else:
                 await bot.send_photo(chat_id=CHANNEL, photo=fh, caption=caption, parse_mode="HTML")
     else:
