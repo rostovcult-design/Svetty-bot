@@ -122,12 +122,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Скачиваю из Instagram...")
     tmp_dir = tempfile.mkdtemp(prefix="insta_")
     try:
-        files, post_text, username = download_media(text, tmp_dir)
+        files, _, _ = download_media(text, tmp_dir)
         if not files:
             await update.message.reply_text("Не удалось скачать медиа. Попробуй другую ссылку.")
             return
 
-               post_text, username = get_post_info(shortcode)
+        post_text, username = get_post_info(shortcode)
 
         await update.message.reply_text("Пишу подпись...")
         caption = generate_caption(post_text, username)
@@ -154,8 +154,6 @@ def download_media(url, tmp_dir):
     )
     data = response.json()
     media_list = data.get("media", [])
-    post_text = data.get("caption", "") or ""
-    username = data.get("username", "") or ""
 
     files = []
     seen = set()
@@ -172,7 +170,7 @@ def download_media(url, tmp_dir):
             f.write(r.content)
         files.append(filepath)
 
-    return files, post_text, username
+    return files, "", ""
 
 
 def is_video(f):
