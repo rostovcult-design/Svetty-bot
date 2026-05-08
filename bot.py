@@ -66,6 +66,7 @@ def get_post_text(shortcode: str) -> tuple:
         },
         timeout=15
     )
+    raw = response.text[:500]
     data = response.json()
     caption_obj = data.get("caption", {})
     if isinstance(caption_obj, dict):
@@ -73,7 +74,7 @@ def get_post_text(shortcode: str) -> tuple:
     else:
         post_text = str(caption_obj) if caption_obj else ""
     username = data.get("user", {}).get("username", "")
-    return post_text, username
+    return post_text, username, raw
 
 
 def download_media(url: str, tmp_dir: str) -> list:
@@ -156,8 +157,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("Не удалось скачать медиа.")
             return
 
-        post_text, username = get_post_text(shortcode)
-        await update.message.reply_text("Текст: " + (post_text[:100] if post_text else "ПУСТОЙ"))
+        post_text, username, raw = get_post_text(shortcode)
+        await update.message.reply_text("RAW API ответ: " + raw)
 
         await update.message.reply_text("Пишу подпись...")
         caption = generate_caption(post_text, username)
