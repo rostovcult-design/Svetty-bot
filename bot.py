@@ -127,8 +127,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("Не удалось скачать медиа. Попробуй другую ссылку.")
             return
 
-        if not post_text:
-            post_text, username = get_post_info(shortcode)
+               post_text, username = get_post_info(shortcode)
 
         await update.message.reply_text("Пишу подпись...")
         caption = generate_caption(post_text, username)
