@@ -13,29 +13,46 @@ CHANNEL = "@sohrani_obsudim"
 RAPID_API_KEY = "0e6dc9b84dmsh2db7c5a936be826p1eca23jsne799cef826f2"
 ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
 
-user_links = {}
-
 SYSTEM_PROMPT = """Ты — автор Telegram канала "сохрани, обсудим". Канал про моду, инфоповоды и эстетику.
 
 Твой стиль: разговорный, от первого лица, мнение автора, читатель участвует мысленно.
 
-Рубрики (выбери одну подходящую):
-- "сохрани это" — для красивого контента
-- "обсудим?" — для спорного или интересного
-- "это кто вообще одобрил" — для странного/WTF
-- "тихо происходит" — для скрытых трендов
+Рубрики (выбери одну):
+- сохрани это
+- обсудим?
+- это кто вообще одобрил
+- тихо происходит
 
-Формат поста:
-- Начни с рубрики или сильного заявления
-- 3-5 предложений от первого лица
-- Заканчивай вопросом к читателю или "обсудим?"
-- 3-4 хэштега из списка: #сохраниобсудим #сохраниэто #обсудим #тывидела #нудавайчестно #мнение #модасейчас #инфоповод #трендилинет #эстетика #ктоэтоодобрил #спорно #гениальноилипровал #тихопроисходит #скрытыйтренд
+Формат поста (строго соблюдай):
 
-Важно: пост должен звучать как мысль которую хочется переслать. Никакого официоза. Только живой текст."""
+[рубрика — обычный текст, без форматирования]
+
+**[эмодзи] [заголовок новости — жирный, конкретный, из содержания поста]**
+
+[3-5 предложений от первого лица, живо и с мнением]
+
+[вопрос к читателю или "обсудим?"]
+
+[instagram аккаунт источника в формате @username]
+
+#хэштег1 #хэштег2 #хэштег3
+
+Правила:
+- Эмодзи к заголовку подбирай по смыслу: 🖤 для элегантного, 🔥 для громкого, 🕊️ для утончённого, 👁️ для неожиданного, 🌊 для масштабного, ✨ для красивого, 💔 для грустного инфоповода, 🎭 для арта
+- Хэштеги только из: #сохраниобсудим #сохраниэто #обсудим #тывидела #нудавайчестно #мнение #модасейчас #инфоповод #трендилинет #эстетика #ктоэтоодобрил #спорно #гениальноилипровал #тихопроисходит #скрытыйтренд
+- Никакого лишнего markdown кроме ** для заголовка
+- Используй конкретные имена брендов, дизайнеров, моделей из описания
+- Пост должен звучать как мысль которую хочется переслать"""
 
 
-def generate_caption(instagram_url: str) -> str:
-    prompt = f"Напиши пост для канала по этой Instagram ссылке: {instagram_url}\n\nПридумай что там может быть (мода, показ, street style, бренд, тренд) и напиши пост в нужном стиле. Только текст поста, без пояснений."
+def generate_caption(post_text: str, url: str, username: str) -> str:
+    prompt = f"""Оригинальная подпись из Instagram:
+
+{post_text}
+
+Аккаунт: @{username}
+
+Напиши пост для канала. Только текст поста, без пояснений."""
 
     response = requests.post(
         "https://api.anthropic.com/v1/messages",
@@ -46,7 +63,7 @@ def generate_caption(instagram_url: str) -> str:
         },
         json={
             "model": "claude-opus-4-5",
-            "max_tokens": 500,
+            "max_tokens": 600,
             "system": SYSTEM_PROMPT,
             "messages": [{"role": "user", "content": prompt}],
         },
@@ -58,12 +75,11 @@ def generate_caption(instagram_url: str) -> str:
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Привет! Отправь мне ссылку на Instagram пост — скачаю, напишу подпись и запощу в канал автоматически."
+        "Привет! Отправь мне ссылку на Instagram пост — скачаю, напишу подпись и запощу в канал."
     )
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
     text = update.message.text.strip()
 
     if "instagram.com" not in text:
@@ -73,19 +89,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Скачиваю из Instagram...")
     tmp_dir = tempfile.mkdtemp(prefix="insta_")
     try:
-        files = download_media(text, tmp_dir)
+        files, post_text, username = download_media(text, tmp_dir)
         if not files:
             await update.message.reply_text("Не удалось скачать. Попробуй другую ссылку.")
             return
 
         await update.message.reply_text("Пишу подпись...")
-        caption = generate_caption(text)
+        caption = generate_caption(post_text, text, username)
 
         await update.message.reply_text("Постю в канал...")
         bot = Bot(token=BOT_TOKEN)
         await post_media(bot, files, caption)
 
-        await update.message.reply_text("Готово! Опубликовано в @sohrani_obsudim\n\nВот подпись которую написала:\n\n" + caption)
+        await update.message.reply_text("Готово! Опубликовано в @sohrani_obsudim")
     except Exception as e:
         await update.message.reply_text("Ошибка: " + str(e))
     finally:
@@ -103,6 +119,9 @@ def download_media(url, tmp_dir):
     )
     data = response.json()
     media_list = data.get("media", [])
+    post_text = data.get("caption", "") or data.get("title", "") or data.get("description", "") or ""
+    username = data.get("username", "") or data.get("owner", {}).get("username", "") or ""
+
     files = []
     seen = set()
     for item in media_list[:10]:
@@ -117,7 +136,8 @@ def download_media(url, tmp_dir):
         with open(filepath, "wb") as f:
             f.write(r.content)
         files.append(filepath)
-    return files
+
+    return files, post_text, username
 
 
 def is_video(f):
@@ -129,16 +149,16 @@ async def post_media(bot, files, caption):
         f = files[0]
         with open(f, "rb") as fh:
             if is_video(f):
-                await bot.send_video(chat_id=CHANNEL, video=fh, caption=caption, supports_streaming=True)
+                await bot.send_video(chat_id=CHANNEL, video=fh, caption=caption, parse_mode="Markdown")
             else:
-                await bot.send_photo(chat_id=CHANNEL, photo=fh, caption=caption)
+                await bot.send_photo(chat_id=CHANNEL, photo=fh, caption=caption, parse_mode="Markdown")
     else:
         media, handles = [], []
         for i, f in enumerate(files[:10]):
             fh = open(f, "rb")
             handles.append(fh)
             cap = caption if i == 0 else None
-            media.append(InputMediaVideo(fh, caption=cap) if is_video(f) else InputMediaPhoto(fh, caption=cap))
+            media.append(InputMediaVideo(fh, caption=cap, parse_mode="Markdown") if is_video(f) else InputMediaPhoto(fh, caption=cap, parse_mode="Markdown"))
         try:
             await bot.send_media_group(chat_id=CHANNEL, media=media)
         finally:
