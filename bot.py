@@ -67,18 +67,19 @@ def get_post_info(shortcode: str) -> tuple:
         timeout=15
     )
     data = response.json()
-    caption = data.get("caption", {})
-    post_text = caption.get("text", "") if isinstance(caption, dict) else ""
+    caption_obj = data.get("caption", {})
+    if isinstance(caption_obj, dict):
+        post_text = caption_obj.get("text", "")
+    else:
+        post_text = str(caption_obj) if caption_obj else ""
     username = data.get("user", {}).get("username", "")
     return post_text, username
 
 
 def generate_caption(post_text: str, username: str) -> str:
-    prompt = f"""Оригинальная подпись из Instagram:
+    prompt = f"""Оригинальная подпись из Instagram поста от @{username}:
 
 {post_text}
-
-Аккаунт источника: @{username}
 
 Напиши пост для канала прямо сейчас. Только текст поста."""
 
@@ -103,7 +104,7 @@ def generate_caption(post_text: str, username: str) -> str:
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Привет! Отправь мне ссылку на Instagram пост — скачаю, напишу подпись и запощу в канал."
+        "Привет! Отправь мне ссылку на Instagram пост."
     )
 
 
@@ -111,23 +112,24 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
 
     if "instagram.com" not in text:
-        await update.message.reply_text("Это не Instagram ссылка. Попробуй ещё раз.")
+        await update.message.reply_text("Это не Instagram ссылка.")
         return
 
     shortcode = extract_shortcode(text)
     if not shortcode:
-        await update.message.reply_text("Не могу найти shortcode в ссылке. Попробуй другую.")
+        await update.message.reply_text("Не могу найти shortcode.")
         return
 
     await update.message.reply_text("Скачиваю из Instagram...")
     tmp_dir = tempfile.mkdtemp(prefix="insta_")
     try:
-        files, _, _ = download_media(text, tmp_dir)
+        files = download_media(text, tmp_dir)
         if not files:
-            await update.message.reply_text("Не удалось скачать медиа. Попробуй другую ссылку.")
+            await update.message.reply_text("Не удалось скачать медиа.")
             return
 
         post_text, username = get_post_info(shortcode)
+        await update.message.reply_text("Текст поста: " + post_text[:200])
 
         await update.message.reply_text("Пишу подпись...")
         caption = generate_caption(post_text, username)
@@ -136,7 +138,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         bot = Bot(token=BOT_TOKEN)
         await post_media(bot, files, caption)
 
-        await update.message.reply_text("Готово! Опубликовано в @sohrani_obsudim")
+        await update.message.reply_text("Готово!")
     except Exception as e:
         await update.message.reply_text("Ошибка: " + str(e))
     finally:
@@ -154,7 +156,6 @@ def download_media(url, tmp_dir):
     )
     data = response.json()
     media_list = data.get("media", [])
-
     files = []
     seen = set()
     for item in media_list[:10]:
@@ -169,8 +170,7 @@ def download_media(url, tmp_dir):
         with open(filepath, "wb") as f:
             f.write(r.content)
         files.append(filepath)
-
-    return files, "", ""
+    return files
 
 
 def is_video(f):
