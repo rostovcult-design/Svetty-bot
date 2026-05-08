@@ -57,26 +57,23 @@ def extract_shortcode(url: str) -> str:
 
 
 def get_post_text(shortcode: str) -> tuple:
-    try:
-        response = requests.get(
-            "https://instagram-api-fast-reliable-data-scraper.p.rapidapi.com/post_details",
-            params={"shortcode": shortcode},
-            headers={
-                "x-rapidapi-host": "instagram-api-fast-reliable-data-scraper.p.rapidapi.com",
-                "x-rapidapi-key": RAPID_API_KEY,
-            },
-            timeout=15
-        )
-        data = response.json()
-        caption_obj = data.get("caption", {})
-        if isinstance(caption_obj, dict):
-            post_text = caption_obj.get("text", "")
-        else:
-            post_text = str(caption_obj) if caption_obj else ""
-        username = data.get("user", {}).get("username", "")
-        return post_text, username
-    except Exception:
-        return "", ""
+    response = requests.get(
+        "https://instagram-api-fast-reliable-data-scraper.p.rapidapi.com/post_details",
+        params={"shortcode": shortcode},
+        headers={
+            "x-rapidapi-host": "instagram-api-fast-reliable-data-scraper.p.rapidapi.com",
+            "x-rapidapi-key": RAPID_API_KEY,
+        },
+        timeout=15
+    )
+    data = response.json()
+    caption_obj = data.get("caption", {})
+    if isinstance(caption_obj, dict):
+        post_text = caption_obj.get("text", "")
+    else:
+        post_text = str(caption_obj) if caption_obj else ""
+    username = data.get("user", {}).get("username", "")
+    return post_text, username
 
 
 def download_media(url: str, tmp_dir: str) -> list:
@@ -160,6 +157,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         post_text, username = get_post_text(shortcode)
+        await update.message.reply_text("Текст: " + (post_text[:100] if post_text else "ПУСТОЙ"))
 
         await update.message.reply_text("Пишу подпись...")
         caption = generate_caption(post_text, username)
