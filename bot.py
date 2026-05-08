@@ -82,7 +82,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         caption = generate_caption(text)
 
         await update.message.reply_text("Постю в канал...")
-        bot = Bot(token=BOT_TOKEN, connect_timeout=60, read_timeout=120, write_timeout=120)
+        bot = Bot(token=BOT_TOKEN)
         await post_media(bot, files, caption)
 
         await update.message.reply_text("Готово! Опубликовано в @sohrani_obsudim\n\nВот подпись которую написала:\n\n" + caption)
