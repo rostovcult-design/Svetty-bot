@@ -11,13 +11,54 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 CHANNEL = "@sohrani_obsudim"
 RAPID_API_KEY = "0e6dc9b84dmsh2db7c5a936be826p1eca23jsne799cef826f2"
+ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
 
 user_links = {}
+
+SYSTEM_PROMPT = """Ты — автор Telegram канала "сохрани, обсудим". Канал про моду, инфоповоды и эстетику.
+
+Твой стиль: разговорный, от первого лица, мнение автора, читатель участвует мысленно.
+
+Рубрики (выбери одну подходящую):
+- "сохрани это" — для красивого контента
+- "обсудим?" — для спорного или интересного
+- "это кто вообще одобрил" — для странного/WTF
+- "тихо происходит" — для скрытых трендов
+
+Формат поста:
+- Начни с рубрики или сильного заявления
+- 3-5 предложений от первого лица
+- Заканчивай вопросом к читателю или "обсудим?"
+- 3-4 хэштега из списка: #сохраниобсудим #сохраниэто #обсудим #тывидела #нудавайчестно #мнение #модасейчас #инфоповод #трендилинет #эстетика #ктоэтоодобрил #спорно #гениальноилипровал #тихопроисходит #скрытыйтренд
+
+Важно: пост должен звучать как мысль которую хочется переслать. Никакого официоза. Только живой текст."""
+
+
+def generate_caption(instagram_url: str) -> str:
+    prompt = f"Напиши пост для канала по этой Instagram ссылке: {instagram_url}\n\nПридумай что там может быть (мода, показ, street style, бренд, тренд) и напиши пост в нужном стиле. Только текст поста, без пояснений."
+
+    response = requests.post(
+        "https://api.anthropic.com/v1/messages",
+        headers={
+            "x-api-key": ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        },
+        json={
+            "model": "claude-opus-4-5",
+            "max_tokens": 500,
+            "system": SYSTEM_PROMPT,
+            "messages": [{"role": "user", "content": prompt}],
+        },
+        timeout=30,
+    )
+    data = response.json()
+    return data["content"][0]["text"]
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Привет! Отправь мне ссылку на Instagram пост и я запощу его в канал."
+        "Привет! Отправь мне ссылку на Instagram пост — скачаю, напишу подпись и запощу в канал автоматически."
     )
 
 
@@ -25,31 +66,28 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text.strip()
 
-    if user_id not in user_links:
-        if "instagram.com" not in text:
-            await update.message.reply_text("Это не Instagram ссылка. Попробуй ещё раз.")
-            return
-        user_links[user_id] = text
-        await update.message.reply_text("Напиши подпись для поста (или знак минус чтобы без подписи):")
+    if "instagram.com" not in text:
+        await update.message.reply_text("Это не Instagram ссылка. Попробуй ещё раз.")
         return
-
-    caption = "" if text == "-" else text
-    url = user_links.pop(user_id)
 
     await update.message.reply_text("Скачиваю из Instagram...")
     tmp_dir = tempfile.mkdtemp(prefix="insta_")
     try:
-        files = download_media(url, tmp_dir)
+        files = download_media(text, tmp_dir)
         if not files:
             await update.message.reply_text("Не удалось скачать. Попробуй другую ссылку.")
             return
+
+        await update.message.reply_text("Пишу подпись...")
+        caption = generate_caption(text)
+
         await update.message.reply_text("Постю в канал...")
-        bot = Bot(token=BOT_TOKEN)
+        bot = Bot(token=BOT_TOKEN, connect_timeout=60, read_timeout=120, write_timeout=120)
         await post_media(bot, files, caption)
-        await update.message.reply_text("Готово! Опубликовано в @sohrani_obsudim\n\nОтправь следующую ссылку:")
+
+        await update.message.reply_text("Готово! Опубликовано в @sohrani_obsudim\n\nВот подпись которую написала:\n\n" + caption)
     except Exception as e:
         await update.message.reply_text("Ошибка: " + str(e))
-        user_links.pop(user_id, None)
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
