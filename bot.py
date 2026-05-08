@@ -14,9 +14,9 @@ CHANNEL = "@sohrani_obsudim"
 RAPID_API_KEY = "0e6dc9b84dmsh2db7c5a936be826p1eca23jsne799cef826f2"
 ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
 
-SYSTEM_PROMPT = """Ты — автор Telegram канала "сохрани, обсудим". Канал про моду, инфоповоды и эстетику.
+SYSTEM_PROMPT = """Ты — автор Telegram канала "сохрани, обсудим". Канал про моду, инфоповоды и эстетику. Аудитория — девушки.
 
-Твой стиль: разговорный, от первого лица, мнение автора, читатель участвует мысленно.
+Твой стиль: разговорный, от первого лица, обращение к читательнице на "ты" в женском роде ("видела", "знала", "думала").
 
 Рубрики (выбери одну):
 - сохрани это
@@ -24,26 +24,36 @@ SYSTEM_PROMPT = """Ты — автор Telegram канала "сохрани, о
 - это кто вообще одобрил
 - тихо происходит
 
-Формат поста (строго):
+Формат поста (строго соблюдай):
 
 [рубрика — обычный текст]
 
-**[эмодзи] [заголовок новости — жирный, конкретный]**
+**[эмодзи] [заголовок новости — жирный, конкретный, с именами из поста]**
 
 [3-5 предложений от первого лица]
 
-[вопрос или "обсудим?"]
+[вопрос к читательнице или "обсудим?"]
 
-@[username источника]
+[ссылка на аккаунт в формате https://www.instagram.com/USERNAME/]
 
-#хэштег1 #хэштег2 #хэштег3
+#хэштег1 #хэштег2 #хэштег3 #ИмяПерсоны #НазваниеБренда
+
+Правила эмодзи — выбирай разные, по смыслу:
+- элегантное/утончённое: 🩰 🎀 🪡 🕶️ 🌹
+- громкое/сенсация: 🔥 ⚡️ 💥 👁️
+- грустное/конец эпохи: 🖤 🥀 💔 🫖
+- арт/культура: 🎭 🖼️ 🫧 ✦
+- красота/мода: 💅 🪞 👗 💎
+- неожиданное/спорное: 👀 🤨 😶 🫠
+
+Хэштеги: сначала базовые из списка, потом имена людей и брендов из поста заглавными:
+Базовые: #сохраниобсудим #сохраниэто #обсудим #тывидела #нудавайчестно #мнение #модасейчас #инфоповод #трендилинет #эстетика #ктоэтоодобрил #спорно #гениальноилипровал #тихопроисходит #скрытыйтренд
 
 Правила:
-- Эмодзи подбирай по смыслу: 🖤 элегантное, 🔥 громкое, 🕊️ утончённое, 👁️ неожиданное, ✨ красивое, 💔 грустный инфоповод, 🎭 арт, 👑 культовое
-- Хэштеги только из: #сохраниобсудим #сохраниэто #обсудим #тывидела #нудавайчестно #мнение #модасейчас #инфоповод #трендилинет #эстетика #ктоэтоодобрил #спорно #гениальноилипровал #тихопроисходит #скрытыйтренд
 - Никакого лишнего markdown кроме ** для заголовка
 - НИКОГДА не проси дополнительную информацию
-- Используй конкретные имена брендов, дизайнеров, моделей из подписи"""
+- Используй конкретные имена из подписи поста
+- Обращайся к читательнице в женском роде"""
 
 
 def extract_shortcode(url: str) -> str:
@@ -65,7 +75,6 @@ def get_post_text(shortcode: str) -> tuple:
         },
         timeout=15
     )
-    raw = response.text[:300]
     data = response.json()
     caption_obj = data.get("caption", {})
     if isinstance(caption_obj, dict):
@@ -73,7 +82,7 @@ def get_post_text(shortcode: str) -> tuple:
     else:
         post_text = str(caption_obj) if caption_obj else ""
     username = data.get("user", {}).get("username", "")
-    return post_text, username, raw
+    return post_text, username
 
 
 def download_media(url: str, tmp_dir: str) -> list:
@@ -109,6 +118,8 @@ def generate_caption(post_text: str, username: str) -> str:
 
 {post_text}
 
+Аккаунт источника: @{username} (ссылка: https://www.instagram.com/{username}/)
+
 Напиши пост для канала прямо сейчас. Только текст поста."""
 
     response = requests.post(
@@ -120,7 +131,7 @@ def generate_caption(post_text: str, username: str) -> str:
         },
         json={
             "model": "claude-opus-4-5",
-            "max_tokens": 600,
+            "max_tokens": 700,
             "system": SYSTEM_PROMPT,
             "messages": [{"role": "user", "content": prompt}],
         },
@@ -156,8 +167,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("Не удалось скачать медиа.")
             return
 
-        post_text, username, raw = get_post_text(shortcode)
-        await update.message.reply_text("RAW: " + raw)
+        post_text, username = get_post_text(shortcode)
 
         await update.message.reply_text("Пишу подпись...")
         caption = generate_caption(post_text, username)
