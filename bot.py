@@ -24,11 +24,11 @@ SYSTEM_PROMPT = """Ты — автор Telegram канала "сохрани, о
 - это кто вообще одобрил
 - тихо происходит
 
-Формат поста (строго соблюдай):
+Формат поста (строго соблюдай, используй HTML теги):
 
 [рубрика — обычный текст]
 
-**[эмодзи] [заголовок новости — жирный, конкретный, с именами из поста]**
+<b>[эмодзи] [заголовок новости — конкретный, с именами из поста]</b>
 
 [3-5 предложений от первого лица]
 
@@ -42,15 +42,16 @@ SYSTEM_PROMPT = """Ты — автор Telegram канала "сохрани, о
 - элегантное/утончённое: 🩰 🎀 🪡 🕶️ 🌹
 - громкое/сенсация: 🔥 ⚡️ 💥 👁️
 - грустное/конец эпохи: 🖤 🥀 💔 🫖
-- арт/культура: 🎭 🖼️ 🫧 ✦
+- арт/культура: 🎭 🖼️ 🫧
 - красота/мода: 💅 🪞 👗 💎
 - неожиданное/спорное: 👀 🤨 😶 🫠
 
-Хэштеги: сначала базовые из списка, потом имена людей и брендов из поста заглавными:
-Базовые: #сохраниобсудим #сохраниэто #обсудим #тывидела #нудавайчестно #мнение #модасейчас #инфоповод #трендилинет #эстетика #ктоэтоодобрил #спорно #гениальноилипровал #тихопроисходит #скрытыйтренд
+Хэштеги: сначала 2-3 базовых, потом имена людей и брендов из поста:
+Базовые: #сохраниобсудим #сохраниэто #обсудим #тывидела #модасейчас #инфоповод #эстетика #спорно #гениальноилипровал
 
 Правила:
-- Никакого лишнего markdown кроме ** для заголовка
+- Используй ТОЛЬКО тег <b></b> для жирного заголовка, никаких других HTML тегов
+- НИКОГДА не используй * _ ` [ ] символы
 - НИКОГДА не проси дополнительную информацию
 - Используй конкретные имена из подписи поста
 - Обращайся к читательнице в женском роде"""
@@ -142,9 +143,7 @@ def generate_caption(post_text: str, username: str) -> str:
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Привет! Отправь мне ссылку на Instagram пост."
-    )
+    await update.message.reply_text("Привет! Отправь мне ссылку на Instagram пост.")
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -192,16 +191,16 @@ async def post_media(bot, files, caption):
         f = files[0]
         with open(f, "rb") as fh:
             if is_video(f):
-                await bot.send_video(chat_id=CHANNEL, video=fh, caption=caption, parse_mode="Markdown")
+                await bot.send_video(chat_id=CHANNEL, video=fh, caption=caption, parse_mode="HTML")
             else:
-                await bot.send_photo(chat_id=CHANNEL, photo=fh, caption=caption, parse_mode="Markdown")
+                await bot.send_photo(chat_id=CHANNEL, photo=fh, caption=caption, parse_mode="HTML")
     else:
         media, handles = [], []
         for i, f in enumerate(files[:10]):
             fh = open(f, "rb")
             handles.append(fh)
             cap = caption if i == 0 else None
-            media.append(InputMediaVideo(fh, caption=cap, parse_mode="Markdown") if is_video(f) else InputMediaPhoto(fh, caption=cap, parse_mode="Markdown"))
+            media.append(InputMediaVideo(fh, caption=cap, parse_mode="HTML") if is_video(f) else InputMediaPhoto(fh, caption=cap, parse_mode="HTML"))
         try:
             await bot.send_media_group(chat_id=CHANNEL, media=media)
         finally:
