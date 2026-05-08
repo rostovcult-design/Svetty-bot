@@ -56,26 +56,6 @@ def extract_shortcode(url: str) -> str:
     return ""
 
 
-def get_post_info(shortcode: str) -> tuple:
-    response = requests.get(
-        "https://instagram-api-fast-reliable-data-scraper.p.rapidapi.com/post_details",
-        params={"shortcode": shortcode},
-        headers={
-            "x-rapidapi-host": "instagram-api-fast-reliable-data-scraper.p.rapidapi.com",
-            "x-rapidapi-key": RAPID_API_KEY,
-        },
-        timeout=15
-    )
-    data = response.json()
-    caption_obj = data.get("caption", {})
-    if isinstance(caption_obj, dict):
-        post_text = caption_obj.get("text", "")
-    else:
-        post_text = str(caption_obj) if caption_obj else ""
-    username = data.get("user", {}).get("username", "")
-    return post_text, username
-
-
 def generate_caption(post_text: str, username: str) -> str:
     prompt = f"""Оригинальная подпись из Instagram поста от @{username}:
 
@@ -123,13 +103,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Скачиваю из Instagram...")
     tmp_dir = tempfile.mkdtemp(prefix="insta_")
     try:
-        files = download_media(text, tmp_dir)
+        files, post_text, username = download_media(text, tmp_dir)
         if not files:
             await update.message.reply_text("Не удалось скачать медиа.")
             return
-
-        post_text, username = get_post_info(shortcode)
-        await update.message.reply_text("Текст поста: " + post_text[:200])
 
         await update.message.reply_text("Пишу подпись...")
         caption = generate_caption(post_text, username)
@@ -156,6 +133,22 @@ def download_media(url, tmp_dir):
     )
     data = response.json()
     media_list = data.get("media", [])
+
+    post_text = ""
+    username = ""
+    for item in media_list:
+        if item.get("caption"):
+            post_text = item.get("caption", "")
+        if item.get("username"):
+            username = item.get("username", "")
+        if item.get("owner"):
+            username = item.get("owner", "")
+
+    if not post_text:
+        post_text = data.get("caption", "") or data.get("title", "") or data.get("description", "") or ""
+    if not username:
+        username = data.get("username", "") or data.get("channel", "") or ""
+
     files = []
     seen = set()
     for item in media_list[:10]:
@@ -170,7 +163,8 @@ def download_media(url, tmp_dir):
         with open(filepath, "wb") as f:
             f.write(r.content)
         files.append(filepath)
-    return files
+
+    return files, post_text, username
 
 
 def is_video(f):
